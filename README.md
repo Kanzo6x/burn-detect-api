@@ -1,1 +1,0 @@
-# burn-detect-api
