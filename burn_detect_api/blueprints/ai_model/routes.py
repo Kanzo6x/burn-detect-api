@@ -1,36 +1,39 @@
-from flask import Blueprint, render_template ,request
+from flask import Blueprint, render_template, request
 from flask_restful import Resource, Api
-import pickle
 import os
 from PIL import Image
 import numpy as np
-import base64
-import io
-
+from tensorflow import keras
 
 ai_model = Blueprint('ai_model', __name__, template_folder='templates')
 api = Api(ai_model)
 
 # Load the ML model
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'efficientnet_model.pkl')
-with open(MODEL_PATH, 'rb') as f:
-    model = pickle.load(f)
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'efficientnet_model.h5')  # Change extension to .h5
+try:
+    model = keras.models.load_model(MODEL_PATH)
+except Exception as e:
+    print(f"Error loading model: {str(e)}")
+    model = None
 
 @ai_model.route('/',methods=['GET'])
 def sendphoto():
     return render_template('ai_model/BurnDetector.html'),200
 
-
-
 class AiModelResource(Resource):
     def post(self):
         try:
+            if model is None:
+                return {
+                    'success': False,
+                    'message': 'Model not properly loaded'
+                }, 500
+
             # Check if image file is present in request
             if 'image' not in request.files:
                 return {
                 'success': False,
                 'message': 'No image file provided'},400
-            
             
             image_file = request.files['image']
             
@@ -54,11 +57,17 @@ class AiModelResource(Resource):
             # Make prediction
             prediction = model.predict(image_array)
             
-            # Convert prediction to result
-            # Adjust this based on your model's output format
+            # Get the class with highest probability
+            predicted_class = int(np.argmax(prediction[0]))
+            confidence = float(np.max(prediction[0]))
+            
             result = {
                 'success': True, 
-                'data': prediction.tolist(),
+                'data': {
+                    'class': predicted_class,
+                    'confidence': confidence,
+                    'raw_predictions': prediction.tolist()
+                },
                 'message': 'Image prediction successful'
             }
             
@@ -67,7 +76,7 @@ class AiModelResource(Resource):
         except Exception as e:
             return {
                 'success': False,
-                'message': str(e)
+                'message': f'Prediction error: {str(e)}'
             }, 500
 
 api.add_resource(AiModelResource, '/predict', endpoint='predict')
