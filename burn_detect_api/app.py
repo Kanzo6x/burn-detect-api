@@ -28,6 +28,9 @@ def create_app():
         
     from burn_detect_api.blueprints.hospitals.routes import Location
     app.register_blueprint(Location)
+
+    from burn_detect_api.blueprints.ai_model.routes import ai_model
+    app.register_blueprint(ai_model)
     
     Migrate(app, db)
     return app
