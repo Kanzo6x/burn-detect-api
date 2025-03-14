@@ -1,24 +1,27 @@
 from flask import Blueprint, render_template, request
 from flask_restful import Resource, Api
-import os
 from PIL import Image
 import numpy as np
-from tensorflow import keras
+import tensorflow as tf
+import os
+
 
 ai_model = Blueprint('ai_model', __name__, template_folder='templates')
 api = Api(ai_model)
 
-# Load the ML model
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'efficientnet_model.h5')  # Change extension to .h5
+# 🔹 Ensure class labels match model's expected order
+class_labels = ["First-degree Burn", "Second-degree Burn", "Third-degree Burn"]
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'efficientnet_model.h5')  
 try:
-    model = keras.models.load_model(MODEL_PATH)
+    model = tf.keras.models.load_model(MODEL_PATH)
 except Exception as e:
     print(f"Error loading model: {str(e)}")
     model = None
 
 @ai_model.route('/',methods=['GET'])
 def sendphoto():
-    return render_template('ai_model/BurnDetector.html'),200
+    return render_template('ai_model/BurnDetector.html'), 200
 
 class AiModelResource(Resource):
     def post(self):
@@ -39,39 +42,55 @@ class AiModelResource(Resource):
             
             # Open and preprocess the image
             image = Image.open(image_file)
+
             # Convert to RGB if needed
             if image.mode != 'RGB':
                 image = image.convert('RGB')
-            
-            # Resize image to match your model's input size
-            image = image.resize((224, 224))  # Adjust size as per your model
-            
-            # Convert to numpy array and preprocess
-            image_array = np.array(image)
-            # Normalize if needed
-            image_array = image_array / 255.0
-            
-            # Add batch dimension
+
+            # Resize image to match model input
+            image = image.resize((224, 224))
+
+            # Convert to numpy array and normalize
+            image_array = np.array(image) / 255.0  # Normalize to [0,1]
+
+            # Ensure correct input shape (batch size of 1)
             image_array = np.expand_dims(image_array, axis=0)
-            
-            # Make prediction
-            prediction = model.predict(image_array)
-            
-            # Get the class with highest probability
-            predicted_class = int(np.argmax(prediction[0]))
-            confidence = float(np.max(prediction[0]))
-            
-            result = {
-                'success': True, 
-                'data': {
-                    'class': predicted_class,
-                    'confidence': confidence,
-                    'raw_predictions': prediction.tolist()
+
+
+            # 🔹 Make prediction
+            prediction = model.predict(image_array)[0]  # Extract first sample output
+
+            # 🔹 Get Top-2 Predictions
+            top_2_indices = np.argsort(prediction)[-2:][::-1]
+            top_2_results = [
+                {"class": class_labels[i], "confidence": float(prediction[i])}
+                for i in top_2_indices
+            ]
+
+            # 🔹 Get highest confidence class
+            predicted_index = top_2_results[0]["class"]
+            confidence = top_2_results[0]["confidence"]
+
+            # 🔹 Confidence threshold check
+            confidence_threshold = 0.7  # Adjust based on real test images
+            if confidence < confidence_threshold:
+                return {
+                    "success": True,
+                    "message": "⚠ Low confidence prediction. Please verify manually.",
+                    "data": {"top_predictions": top_2_results}
+             }, 200
+
+            # 🔹 Return final result
+            return {
+                "success": True,
+                "data": {
+                    "class": predicted_index,
+                    "confidence": confidence,
+                    "raw_predictions": prediction.tolist()
                 },
-                'message': 'Image prediction successful'
-            }
-            
-            return result, 200
+                "message": "Burn degree prediction successful"
+            }, 200
+
             
         except Exception as e:
             return {
