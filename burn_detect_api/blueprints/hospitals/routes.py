@@ -1,7 +1,8 @@
-from flask import Blueprint
+from flask import Blueprint,Response
 from flask_restful import Api,Resource
 from burn_detect_api.blueprints.hospitals.models import Hospital
 from burn_detect_api.app import db
+import json
 
 Location = Blueprint('Location',__name__)
 api = Api(Location)
@@ -36,22 +37,32 @@ api.add_resource(LocationResource,'/all_hospitals',endpoint='getHospitals')
 #this resource have a get method only that retrives all hospitals data
 #from the db model that named Hospital of course it returns 
 
-class GovernorateResource(Resource): #this resource will be named '/Governorate/<string:governorate>'
+class GovernorateResource(Resource):
     def get(self, governorate):
         try:
             hospitals = Hospital.query.filter_by(governorate=governorate).all()
             hospitals_list = [hospital.serialize() for hospital in hospitals]
             
-            return {
+            response_data = {
                 'success': True,
                 'data': hospitals_list,
                 'message': 'Hospitals retrieved successfully'
             }
             
+            return Response(
+                json.dumps(response_data, ensure_ascii=False,indent=4), 
+                mimetype='application/json'
+            )
+
         except Exception as e:
-            return {
+            error_response = {
                 'success': False,
                 'message': str(e)
-            }, 500
+            }
+            return Response(
+                json.dumps(error_response, ensure_ascii=False), 
+                mimetype='application/json', 
+                status=500
+            )
 
-api.add_resource(GovernorateResource,'/Governorate/<string:governorate>',endpoint='SpecificGovernorate') #/Governorate/Cairo
+api.add_resource(GovernorateResource, '/Governorate/<string:governorate>', endpoint='SpecificGovernorate')
