@@ -54,4 +54,4 @@ class GovernorateResource(Resource): #this resource will be named '/Governorate/
                 'message': str(e)
             }, 500
 
-api.add_resource(GovernorateResource,'/Governorate/<string:governorate>',endpoint='SpecificGovernorate')
+api.add_resource(GovernorateResource,'/Governorate/<string:governorate>',endpoint='SpecificGovernorate') #/Governorate/Cairo
