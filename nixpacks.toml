@@ -1,9 +1,8 @@
 [phases.setup]
 nixPkgs = ["python311"]
-cmds = ["python3 -m ensurepip"]
 
 [phases.build]
-cmds = ["python3 -m pip install --upgrade pip", "pip install -r requirements.txt"]
+cmds = ["python3 -m pip install --upgrade pip setuptools wheel", "pip install -r requirements.txt"]
 
 [start]
 cmd = "gunicorn run:flask_app"
