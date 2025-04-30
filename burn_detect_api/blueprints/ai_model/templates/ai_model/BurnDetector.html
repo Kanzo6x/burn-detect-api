@@ -57,15 +57,82 @@
         .submit-btn:hover {
             background-color: #45a049;
         }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .success {
+            background-color: #dff0d8;
+            border: 1px solid #d6e9c6;
+            color: #3c763d;
+        }
+
+        .error {
+            background-color: #f2dede;
+            border: 1px solid #ebccd1;
+            color: #a94442;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
-    <form class="upload-form" method="POST" enctype="multipart/form-data" action="{{ url_for('ai_model.predict') }}">
+    <form class="upload-form" id="burnForm" enctype="multipart/form-data">
         <h2>Burn Detection</h2>
         <div class="file-input-container">
             <input type="file" class="file-input" name="image" accept="image/*" required>
         </div>
         <button type="submit" class="submit-btn">Analyze Image</button>
+        <div class="loading">Analyzing image...</div>
+        <div id="result"></div>
     </form>
+
+    <script>
+        document.getElementById('burnForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const loading = document.querySelector('.loading');
+            const result = document.getElementById('result');
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+
+            fetch('/predict', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                
+                if (data.success) {
+                    result.className = 'success';
+                    result.innerHTML = `
+                        <strong>Prediction:</strong> ${data.data.class}<br>
+                        <strong>Confidence:</strong> ${(data.data.confidence * 100).toFixed(1)}%
+                    `;
+                } else {
+                    result.className = 'error';
+                    result.innerHTML = `Error: ${data.message}`;
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'error';
+                result.innerHTML = 'Error: Could not process the image';
+            });
+        });
+    </script>
 </body>
 </html>
