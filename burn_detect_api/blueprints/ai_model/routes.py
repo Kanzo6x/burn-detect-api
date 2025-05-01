@@ -10,36 +10,40 @@ import os
 ai_model = Blueprint('ai_model', __name__, template_folder='templates')
 api = Api(ai_model)
 
-# 🔹 Updated class labels
-class_labels = ['first degree', 'second degree', 'third degree', 'normal skin']
+# Updated class labels to match training exactly
+class_labels = ["First-degree burns", "Second-degree burns", "Third-degree burns", "Normal skin"]
 
-# 🔹 Model path
+# Model path
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'efficientnet_model.pth')
 
-# 🔹 Global model cache
+# Global model cache
 _model_instance = None
+
+class BurnClassifier(torch.nn.Module):
+    def __init__(self, num_classes=4):
+        super().__init__()
+        self.efficientnet = models.efficientnet_b0(weights=None)
+        in_features = self.efficientnet.classifier[1].in_features
+        self.efficientnet.classifier = torch.nn.Sequential(
+            torch.nn.Linear(in_features, 512),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.4),
+            torch.nn.Linear(512, num_classes)
+        )
+    
+    def forward(self, x):
+        return self.efficientnet(x)
 
 def load_model():
     global _model_instance
     if _model_instance is None:
         try:
-            # Initialize the EfficientNet model architecture
-            _model_instance = models.efficientnet_b0(pretrained=False)
-            # Modify the last fully connected layer to match your number of classes
-            _model_instance.classifier[1] = torch.nn.Linear(1280, len(class_labels))
+            # Initialize the custom model
+            _model_instance = BurnClassifier()
             
-            # Load the state dictionary and fix the keys
+            # Load the state dictionary
             state_dict = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
-            # Remove the 'efficientnet.' prefix from keys
-            new_state_dict = {}
-            for key, value in state_dict.items():
-                if key.startswith('efficientnet.'):
-                    new_key = key.replace('efficientnet.', '')
-                    new_state_dict[new_key] = value
-                else:
-                    new_state_dict[key] = value
-            
-            _model_instance.load_state_dict(new_state_dict)
+            _model_instance.load_state_dict(state_dict)
             _model_instance.eval()
             print("Model loaded successfully.")
         except Exception as e:
@@ -72,7 +76,7 @@ def predict_burn(image_file):
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
         
         image_tensor = transform(image).unsqueeze(0)
@@ -87,11 +91,8 @@ def predict_burn(image_file):
         top_index = np.argmax(prediction_np)
         confidence = prediction_np[top_index]
 
-        # Add a check to prevent misclassification
-        if confidence < 0.5:
-            top_class = "Unknown"
-        else:
-            top_class = class_labels[top_index]
+        
+        top_class = class_labels[top_index]
 
         return {
             "data": {
@@ -102,12 +103,12 @@ def predict_burn(image_file):
     except Exception as e:
         raise Exception(f"Error processing image: {str(e)}")
 
-# 🔹 UI Route
+# UI Route
 @ai_model.route('/', methods=['GET'])
 def sendphoto():
     return render_template('ai_model/BurnDetector.html'), 200
 
-# 🔹 Predict API
+# Predict API
 class AiModelResource(Resource):
     def post(self):
         try:
